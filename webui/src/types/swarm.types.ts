@@ -70,6 +70,8 @@ export interface ISwarmState {
   promptMaxTokens?: number;
   useRandomPrompts?: boolean;
   useSinglePrompt?: boolean;
+  useSharegpt?: boolean;
+  sharegptPath?: string;
   ignoreEos?: boolean;
   openaiApiKey?: string;
 }
@@ -107,6 +109,8 @@ export interface ISwarmFormInput
   promptMaxTokens?: number;
   useRandomPrompts?: boolean;
   useSinglePrompt?: boolean;
+  useSharegpt?: boolean;
+  sharegptPath?: string;
   ignoreEos?: boolean;
   openaiApiKey?: string;
 }

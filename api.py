@@ -19,6 +19,7 @@ from metrics_collector import MetricsCollector
 from prompt import (
     get_prompt_set,
     get_prompt_set_random,
+    get_prompt_set_sharegpt,
     get_prompt_set_single,
     system_prompt,
 )
@@ -71,6 +72,8 @@ def update_args(  # noqa: C901
     prompt_max_tokens: int | None = None,
     use_random_prompts: bool | None = None,
     use_single_prompt: bool | None = None,
+    use_sharegpt: bool | None = None,
+    sharegpt_path: str | None = None,
     ignore_eos: bool | None = None,
     user_count: int | None = None,
     host: str | None = None,
@@ -91,6 +94,10 @@ def update_args(  # noqa: C901
         args.use_random_prompts = use_random_prompts
     if use_single_prompt is not None:
         args.use_single_prompt = use_single_prompt
+    if use_sharegpt is not None:
+        args.use_sharegpt = use_sharegpt
+    if sharegpt_path is not None:
+        args.sharegpt_path = sharegpt_path
     if ignore_eos is not None:
         args.ignore_eos = ignore_eos
     if user_count is not None:
@@ -117,6 +124,12 @@ parser.add_argument("--quantiles", type=parse_quantiles, default="50,90,99")
 parser.add_argument("--seed", type=int, default=123)
 parser.add_argument("--use_random_prompts", type=str_to_bool, default="False")
 parser.add_argument("--use_single_prompt", type=str_to_bool, default="False")
+parser.add_argument("--use_sharegpt", type=str_to_bool, default="False")
+parser.add_argument(
+    "--sharegpt_path",
+    type=str,
+    default="datasets/ShareGPT_V3_unfiltered_cleaned_split.json",
+)
 parser.add_argument("--ignore_eos", type=str_to_bool, default="False")
 parser.add_argument("--user_count", type=int, default=1)
 parser.add_argument("--host", type=str, default="http://localhost:8000")
@@ -165,6 +178,7 @@ def create_dynamic_charts_config(
         ],
         "Active Users": [("active_users", "Users")],
         "Tokens per Second": [
+            ("total_input_tokens_per_second", "Input Tokens/s"),
             ("total_output_tokens_per_second", "Output Tokens/s"),
             ("total_empty_output_tokens_per_second", "Empty Output Tokens/s"),
         ],
@@ -439,6 +453,8 @@ async def start_swarm(
     prompt_max_tokens: int | None = Form(None),
     use_random_prompts: bool | None = Form(None),
     use_single_prompt: bool | None = Form(None),
+    use_sharegpt: bool | None = Form(None),
+    sharegpt_path: str | None = Form(None),
     ignore_eos: bool | None = Form(None),
     openai_api_key: str | None = Form(None),
 ) -> dict:
@@ -451,6 +467,8 @@ async def start_swarm(
         prompt_max_tokens=prompt_max_tokens,
         use_random_prompts=use_random_prompts,
         use_single_prompt=use_single_prompt,
+        use_sharegpt=use_sharegpt,
+        sharegpt_path=sharegpt_path,
         ignore_eos=ignore_eos,
         user_count=user_count,
         host=host,
@@ -463,7 +481,11 @@ async def start_swarm(
         tokenizer = AutoTokenizer.from_pretrained(args.tokenizer)
         if not tokenizer.chat_template:
             tokenizer.chat_template = "{{prompt}}"
-        if args.use_random_prompts:
+        if args.use_sharegpt:
+            prompts = get_prompt_set_sharegpt(
+                tokenizer, args.sharegpt_path, args.prompt_min_tokens, args.prompt_max_tokens
+            )
+        elif args.use_random_prompts:
             prompts = get_prompt_set_random(tokenizer)
         elif args.use_single_prompt:
             prompts = get_prompt_set_single(tokenizer)

@@ -125,3 +125,81 @@ def get_prompt_set_single(tokenizer: PreTrainedTokenizerBase) -> list[dict]:
         {"prompt": d["question"], "num_input_tokens": d["num_input_tokens"]}
         for d in dataset
     ]
+
+
+def get_prompt_set_sharegpt(
+    tokenizer: PreTrainedTokenizerBase,
+    dataset_path: str = "datasets/ShareGPT_V3_unfiltered_cleaned_split.json",
+    min_input_length: int = 0,
+    max_input_length: int = 500,
+) -> list[dict]:
+    """
+    Load ShareGPT format dataset and return prompts with length between
+    min_input_length and max_input_length.
+    
+    ShareGPT format:
+    [
+        {
+            "conversations": [
+                {"value": "user message"},
+                {"value": "assistant response"},
+                ...
+            ]
+        },
+        ...
+    ]
+    """
+    print(f"Loading ShareGPT dataset from {dataset_path}")
+    
+    if not os.path.exists(dataset_path):
+        raise FileNotFoundError(
+            f"ShareGPT dataset not found at {dataset_path}. "
+            "Please ensure the dataset file exists."
+        )
+    
+    with open(dataset_path, encoding="utf-8") as f:
+        dataset = json.load(f)
+    
+    # Filter entries with at least 2 conversation turns
+    dataset = [
+        entry
+        for entry in dataset
+        if "conversations" in entry and len(entry["conversations"]) >= 2
+    ]
+    
+    print(f"Found {len(dataset)} valid conversations in ShareGPT dataset")
+    
+    prompts = []
+    for entry in dataset:
+        # Use first conversation turn as the user prompt
+        user_prompt = entry["conversations"][0]["value"]
+        
+        # Apply chat template with system prompt
+        chat = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+        num_input_tokens = len(
+            tokenizer.apply_chat_template(
+                chat, tokenize=True, add_generation_prompt=True
+            )
+        )
+        
+        # Filter by token length
+        if min_input_length <= num_input_tokens <= max_input_length:
+            prompts.append({
+                "prompt": user_prompt,
+                "num_input_tokens": num_input_tokens
+            })
+    
+    print(f"Filtered to {len(prompts)} prompts within token length range "
+          f"[{min_input_length}, {max_input_length}]")
+    
+    if not prompts:
+        raise ValueError(
+            f"No prompts found in ShareGPT dataset within token length range "
+            f"[{min_input_length}, {max_input_length}]. "
+            f"Try adjusting --prompt-min-tokens and --prompt-max-tokens."
+        )
+    
+    return prompts

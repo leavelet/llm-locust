@@ -66,6 +66,8 @@ interface ISwarmForm
       | 'promptMaxTokens'
       | 'useRandomPrompts'
       | 'useSinglePrompt'
+      | 'useSharegpt'
+      | 'sharegptPath'
       | 'ignoreEos'
       | 'openaiApiKey'
     >,
@@ -96,12 +98,17 @@ function SwarmForm({
   promptMaxTokens,
   useRandomPrompts,
   useSinglePrompt,
+  useSharegpt,
+  sharegptPath,
   ignoreEos,
   openaiApiKey,
 }: ISwarmForm) {
   const [startSwarm] = useStartSwarmMutation();
   const [errorMessage, setErrorMessage] = useState('');
   const [selectedUserClasses, setSelectedUserClasses] = useState(availableUserClasses);
+  const [datasetFormat, setDatasetFormat] = useState<'dolly' | 'sharegpt'>(
+    useSharegpt ? 'sharegpt' : 'dolly'
+  );
   const [promptMode, setPromptMode] = useState(() => {
     if (useRandomPrompts) {
       return {
@@ -130,6 +137,8 @@ function SwarmForm({
       ...(showUserclassPicker && selectedUserClasses ? { userClasses: selectedUserClasses } : {}),
       useRandomPrompts: promptMode.useRandomPrompts,
       useSinglePrompt: promptMode.useSinglePrompt,
+      useSharegpt: datasetFormat === 'sharegpt' && promptMode.sampleFromDataset,
+      sharegptPath: datasetFormat === 'sharegpt' ? inputData.sharegptPath : undefined,
     });
 
     if (data && data.success) {
@@ -145,6 +154,8 @@ function SwarmForm({
         promptMaxTokens: inputData.promptMaxTokens,
         useRandomPrompts: promptMode.useRandomPrompts,
         useSinglePrompt: promptMode.useSinglePrompt,
+        useSharegpt: datasetFormat === 'sharegpt' && promptMode.sampleFromDataset,
+        sharegptPath: inputData.sharegptPath,
         ignoreEos: inputData.ignoreEos,
         openaiApiKey: inputData.openaiApiKey,
       });
@@ -157,6 +168,8 @@ function SwarmForm({
         ...inputData,
         useRandomPrompts: promptMode.useRandomPrompts,
         useSinglePrompt: promptMode.useSinglePrompt,
+        useSharegpt: datasetFormat === 'sharegpt' && promptMode.sampleFromDataset,
+        sharegptPath: inputData.sharegptPath,
       });
     }
   };
@@ -335,6 +348,24 @@ function SwarmForm({
                       }
                       label="Sample from dataset (Whether to sample prompts from a dataset)"
                     />
+                    {promptMode.sampleFromDataset && (
+                      <>
+                        <Select
+                          label="Dataset Format"
+                          name="datasetFormat"
+                          value={datasetFormat}
+                          onChange={(e) => setDatasetFormat(e.target.value as 'dolly' | 'sharegpt')}
+                          options={['dolly', 'sharegpt']}
+                        />
+                        {datasetFormat === 'sharegpt' && (
+                          <TextField
+                            defaultValue={sharegptPath || "datasets/ShareGPT_V3_unfiltered_cleaned_split.json"}
+                            label="ShareGPT Dataset Path (Path to ShareGPT format JSON file)"
+                            name="sharegptPath"
+                          />
+                        )}
+                      </>
+                    )}
                     <FormControlLabel
                       control={<Checkbox defaultChecked={ignoreEos || true} name="ignoreEos" />}
                       label="Ignore EOS Token (Generate exactly Max Output Tokens by ignoring end-of-sequence tokens)"
@@ -378,6 +409,8 @@ const storeConnector = ({
     promptMaxTokens,
     useRandomPrompts,
     useSinglePrompt,
+    useSharegpt,
+    sharegptPath,
     ignoreEos,
     openaiApiKey,
   },
@@ -400,6 +433,8 @@ const storeConnector = ({
   promptMaxTokens,
   useRandomPrompts,
   useSinglePrompt,
+  useSharegpt,
+  sharegptPath,
   ignoreEos,
   openaiApiKey,
 });

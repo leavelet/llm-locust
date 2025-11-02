@@ -85,7 +85,15 @@ class OpenAIChatStreamingClient(BaseModelClient):
 
     def parse_response(self, chunk: bytes) -> list[int]:
         if chunk not in self.chunk_cache:
-            data = chunk.decode("utf-8").strip()
+            try:
+                data = chunk.decode("utf-8").strip()
+            except UnicodeDecodeError as e:
+                logger.warning(
+                    f"UnicodeDecodeError: {e}, chunk bytes (first 200): {chunk.hex()[:200]}..."
+                )
+                self.chunk_cache[chunk] = []
+                return []
+            
             output = []
             for line in data.split("\n"):
                 if line.strip():
@@ -94,7 +102,19 @@ class OpenAIChatStreamingClient(BaseModelClient):
                         if line == "[DONE]":
                             continue
                         try:
-                            text = json.loads(line)["choices"][0]["delta"]["content"]
+                            parsed_json = json.loads(line)
+                            text = parsed_json["choices"][0]["delta"]["content"]
+                            
+                            # Validate text before tokenizing
+                            if text is None or not isinstance(text, str) or not text:
+                                if text is None or text == "":
+                                    # This is normal for finish_reason chunks, skip silently
+                                    continue
+                                logger.warning(
+                                    f"Invalid text for tokenization: text={text}, parsed_data: {parsed_json}"
+                                )
+                                continue
+                            
                             output += self.tokenizer.encode(
                                 text, add_special_tokens=False
                             )

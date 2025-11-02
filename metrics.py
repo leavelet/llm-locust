@@ -175,6 +175,44 @@ class OutputTokensMetric(SimpleMetric):
         )
 
 
+class InputTokensMetric(SimpleMetric):
+    """Metrics based on input tokens"""
+
+    @property
+    def name(self) -> str:
+        return "input_tokens_per_request"
+
+    def calculate(
+        self,
+        start_timestamp: int,
+        end_timestamp: int,
+    ) -> dict[str, int | float]:
+        bucket = self._get_filtered_bucket(start_timestamp, end_timestamp)
+        time_interval = end_timestamp - start_timestamp
+        log_dict = {"total_input_tokens_per_second": 0}
+        if time_interval > 0:
+            log_dict.update(
+                {
+                    "total_input_tokens_per_second": sum(bucket) / time_interval,
+                }
+            )
+        return log_dict
+
+    def collect_request(
+        self,
+        request_log: RequestSuccessLog | RequestFailureLog,
+        metrics_collector: object | None = None,
+    ) -> None:
+        if isinstance(request_log, RequestFailureLog):
+            return
+        self.collect(
+            MetricsLog(
+                timestamp=request_log.timestamp,
+                data=request_log.num_input_tokens,
+            )
+        )
+
+
 class EmptyTokensMetric(SimpleMetric):
     """Metrics based on output tokens"""
 
@@ -291,6 +329,49 @@ class ResponseLatencyMetric(QuantileMetric):
         )
 
 
+class TPOTMetric(QuantileMetric):
+    """Time Per Output Token metric (excluding first token)"""
+
+    @property
+    def name(self) -> str:
+        return "time_per_output_token_ms"
+
+    def collect_request(
+        self,
+        request_log: RequestSuccessLog | RequestFailureLog,
+        metrics_collector: object | None = None,
+    ) -> None:
+        if isinstance(request_log, RequestFailureLog):
+            return
+        
+        # Count total output tokens
+        output_tokens = 0
+        first_token_time = None
+        
+        for token_time, chunk in zip(
+            request_log.token_times,
+            request_log.result_chunks,
+            strict=True,
+        ):
+            output = metrics_collector.model_client.parse_response(chunk)
+            if output:
+                if first_token_time is None:
+                    first_token_time = token_time
+                output_tokens += len(output)
+        
+        # TPOT is only meaningful when there are at least 2 output tokens
+        # (excluding the first token)
+        if output_tokens > 1 and first_token_time is not None:
+            latency_minus_ttft = request_log.end_time - first_token_time
+            tpot = latency_minus_ttft / (output_tokens - 1)
+            self.collect(
+                MetricsLog(
+                    timestamp=request_log.timestamp,
+                    data=1000 * tpot,  # Convert to milliseconds
+                )
+            )
+
+
 class MetricsList:
     def __init__(self) -> None:
         self.metrics: list[SimpleMetric] = []
@@ -339,8 +420,10 @@ class LLMMetricsList(MinimalMetricsList):
         self.metrics.extend(
             [
                 EmptyTokensMetric(),
+                InputTokensMetric(),
                 OutputTokensMetric(),
                 TTFTMetric(quantiles),
+                TPOTMetric(quantiles),
                 InterTokenLatencyMetric(quantiles),
             ]
         )
