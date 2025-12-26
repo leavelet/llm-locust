@@ -18,8 +18,6 @@ from typing import List, Dict, Any
 
 import tqdm  # type: ignore
 
-# 推荐选择具有长答案的任务 (QA/摘要)
-# 而不是分类任务 (如 lsht, trec)
 DEFAULT_FILES_TO_PROCESS = []
 
 longbench_datasets = ["narrativeqa", "qasper", "multifieldqa_en", "multifieldqa_zh", "hotpotqa", "2wikimqa", "musique", \
